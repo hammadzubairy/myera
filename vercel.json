@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "installCommand": "npm install && npm run shared:build",
+  "builds": [{ "src": "apps/api/api/index.ts", "use": "@vercel/node" }],
+  "routes": [{ "src": "/(.*)", "dest": "/apps/api/api/index.ts" }],
+  "crons": [{ "path": "/admin/cron/reminders", "schedule": "0 12 * * *" }]
+}

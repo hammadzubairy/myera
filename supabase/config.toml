@@ -1,0 +1,3 @@
+# Minimal Supabase project hint — use hosted Supabase dashboard for Day 1.
+# Apply migrations from ./migrations via SQL editor or `supabase db push`.
+project_id = "myera"

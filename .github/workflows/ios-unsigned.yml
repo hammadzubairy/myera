@@ -1,0 +1,76 @@
+name: Build unsigned iOS IPA (for Sideloadly / AltStore)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios-unsigned:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build shared package
+        run: npm run shared:build
+
+      - name: Remove paid-only capabilities (Apple Sign In) from app config
+        working-directory: apps/mobile
+        run: |
+          jq '.expo.ios.usesAppleSignIn = false
+              | .expo.plugins |= map(select(. != "expo-apple-authentication"))' app.json > app.tmp.json
+          mv app.tmp.json app.json
+
+      - name: Generate native iOS project (prebuild)
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform ios --no-install --clean
+
+      - name: Empty entitlements (free Apple IDs can't use push / Apple Sign In)
+        working-directory: apps/mobile/ios
+        run: |
+          for f in $(find . -name "*.entitlements" -not -path "./Pods/*"); do
+            printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict/></plist>\n' > "$f"
+            echo "cleared $f"
+          done
+
+      - name: Install CocoaPods
+        working-directory: apps/mobile/ios
+        run: pod install
+
+      - name: Build (no code signing)
+        working-directory: apps/mobile/ios
+        env:
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          WORKSPACE=$(ls -d *.xcworkspace | head -1)
+          SCHEME="${WORKSPACE%.xcworkspace}"
+          xcodebuild build \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath $RUNNER_TEMP/dd \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Package IPA
+        run: |
+          APP=$(find $RUNNER_TEMP/dd/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          echo "Found $APP"
+          mkdir -p $RUNNER_TEMP/out/Payload
+          cp -R "$APP" $RUNNER_TEMP/out/Payload/
+          cd $RUNNER_TEMP/out
+          zip -qry MyEra-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MyEra-unsigned-ipa
+          path: ${{ runner.temp }}/out/MyEra-unsigned.ipa
