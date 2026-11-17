@@ -1,4 +1,4 @@
-# MyEraRx Medical Intake Forms × Dosable API: Technical Analysis and Implementation Feasibility
+https://github.com/saadxhammad/myera# MyEraRx Medical Intake Forms × Dosable API: Technical Analysis and Implementation Feasibility
 
 **Prepared:** 17 Nov 2026 (revised to target the live **myerarx.com** website) · **Type:** investigation and planning only (nothing was changed on any system)
 
